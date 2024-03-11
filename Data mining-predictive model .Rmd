@@ -1,0 +1,296 @@
+---
+title: "Project 2"
+output: html_document
+date: "2023-11-20"
+---
+
+```{r}
+#loading library
+library(caret)
+library(Tplyr)
+library(tidyverse)
+library(dplyr)
+library(ROSE)
+library(rpart)
+library(rpart.plot)
+library(forecast)
+```
+
+To tackle the challenge of understanding the dynamics of rising home prices, in King County we're embarking on a mission to help Jacob Kawalski, a real estate entrepreneur on Earth within the multiverse explore the world of "Fantastic Houses and Where to Find Them." Our goal is to develop a model that can identify the factors influencing home prices in this region.
+
+```{r}
+#Import the data set
+house_33 <- read_csv("house_33.csv")
+head(house_33)
+```
+
+We have access to a dataset called \`house_33.csv\` which contains a wealth of information about homes in King County. This dataset includes attributes that could potentially impact market prices. We'll focus our analysis on variables:
+
+bedrooms: This reflects the number of bedrooms in a home. Is a factor that typically aligns with both home size and family requirements.
+
+bathrooms: The number of bathrooms is another aspect that significantly contributes to a homes value and plays a role in determining its price.
+
+sqft_living: Measuring the footage of the living space this attribute directly indicates the size of the house and serves as one of the primary drivers behind pricing decisions.
+
+sqft_lot:  This variable represents the footage of land associated with each property providing insights, into its size.
+
+floors: The number of levels, in the house can significantly influence both its attractiveness and functionality.
+
+waterfront:  This indicates whether the house offers a view of the waterfront, which's a highly sought after feature that often commands premium pricing.
+
+condition: The overall condition of the house plays a role in determining its livability and aesthetic appeal.
+
+grade: A grade assigned to the house based on King Countys assessment system, which evaluates the quality of construction and design.
+
+sqft_above:  The square footage of the house excluding the basement providing an estimate of the size of its living area.
+
+yr_built: The year in which the house was constructed serves as an indication of its age impacting its value based on whether it's relatively new or holds significance.
+
+yr_renovated:  The year when significant renovations were last carried out on the property can greatly influence its value particularly if recent upgrades have been made.
+
+```{r}
+#Select variables for the data set
+house_33 <- house_33[ ,c(7:13,15:17,19,20)]
+names(house_33)
+```
+
+These variables were selected because they are widely recognized for their impact, on a property\'s value.
+
+For example, factors such, as the size of the living area (sqft_living) the age of the house (yr_built) and the quality (grade and condition) have an impact on what potential buyers consider when searching for a home influencing its price accordingly. Similarly special features like waterfront location can significantly enhance a property\'s desirability and market value.
+
+By understanding these variables, we can develop a model that accurately predicts home prices. This will help Jacob make informed decisions in his real estate venture. The choice to include these variables is based on both knowledge of the real estate market and likely findings from data analysis, which would have revealed their correlations with home prices, in King County.
+
+```{r}
+str(house_33)
+```
+
+```{r}
+#Traning-Validation split
+set.seed(567)
+
+train_index <- sample(1:nrow(house_33), 0.7 * nrow(house_33))
+valid_index <- setdiff(1:nrow(house_33), train_index)
+
+train_df <- house_33[train_index, ]
+valid_df <- house_33[valid_index, ]
+
+nrow(train_df)
+nrow(valid_df)
+
+names(train_df)
+```
+
+```{r}
+str(train_df)
+```
+
+We normalize values to bring them into a common scale, making it easier to compare and analyze data. Normalization also helps to reduce the impact of outliers and improve the accuracy and stability of statistical models.
+
+For KNN, it's critical to normalize or standardize the data because KNN uses distance calculations, where variables on larger scales can disproportionately influence the results. Therefore, **`train_norm`** and **`valid_norm`** indicate that the data was normalized before model fitting.
+
+```{r}
+#Normalisation
+train_norm <- train_df
+valid_norm <- valid_df
+
+norm_values <- preProcess(train_df[, -c(1)],method = c("center",
+                                                       "scale"))
+str(norm_values)
+train_norm[, -c(1)] <- predict(norm_values,
+                                train_df[, -c(1)])
+
+head(train_norm)
+valid_norm[, -c(1)] <- predict(norm_values,
+                              valid_df[, -c(1)])
+
+head(valid_norm)
+```
+
+```{r}
+#Import test set
+house_test <- read_csv("house_test_33.csv")
+head(house_test)
+```
+
+```{r}
+house_test <- house_test[ ,c(7:12,14:16,18,19)]
+names(house_test)
+```
+
+```{r}
+str(house_test)
+house_test_norm <- predict(norm_values, house_test)
+house_test_norm 
+```
+
+During the analysis of the problem titled "Fantastic Houses and Where to Find Them " we developed a Linear Regression Model, for Jacob Kawalskis real estate business. The goal was to predict home prices in King County.
+
+According to the model summary we found that most of the selected variables play a role in predicting home prices. Among the predictors are footage of living space waterfront location and grade. Interestingly we noticed a coefficient for footage above ground level, which could suggest a correlation issue with square footage of living space since both are related to the size of the house. On the hand we found that year of renovation had no impact on price within this model.
+
+The stepwise model has simplified the original linear regression model by potentially removing features that did not contribute significantly to the prediction of home prices. This process optimizes the model by focusing on variables with the strongest relationships to the target variable, aiming to improve predictive accuracy and reduce overfitting.
+
+```{r}
+# Linear Regression Model
+lm_model <- lm(price ~ ., data = train_df)
+
+# Apply stepwise regression using both directions (forward and backward)
+stepwise_model <- step(lm_model, direction = "both", trace = FALSE)
+
+# Summarize the new model
+summary(stepwise_model)
+```
+
+In terms of predictive performance, the RMSE on the training set is approximately \$208,293, and on the validation set, it's about \$220,616. These figures represent the standard deviation of the residuals (prediction errors) and suggest that the model's predictions are, on average, within these ranges from the actual selling prices.
+
+The resulting model maintains a Multiple R-squared value of 0.6488, meaning it explains approximately 64.88% of the variability in home prices within the dataset. The coefficients for each variable reflect their respective contributions to the model's predictions. For instance, **`waterfront`** has a large positive coefficient, indicating that having a waterfront view significantly increases the predicted price of a home.
+
+Considering that yr_renovated doesn't seem to have an impact and the negative coefficient for sqft_above suggests an issue of collinearity it might be worth refining the model further. This could involve techniques such as feature engineering, fine tuning the model or even exploring approaches, like ensemble methods or regularization techniques that can handle collinearity effectively and potentially enhance prediction accuracy.
+
+```{r}
+# Predict on the training set with the stepwise model
+train_pred_stepwise <- predict(stepwise_model, newdata = train_df)
+
+# Evaluate model performance
+rmse_train_stepwise <- RMSE(train_pred_stepwise, train_df$price)
+print(paste("RMSE on Training Set (Stepwise):", rmse_train_stepwise))
+```
+
+```{r}
+# Predict on the validation set with the stepwise model
+valid_pred_stepwise <- predict(stepwise_model, newdata = valid_df)
+
+# Evaluate model performance
+rmse_valid_stepwise <- RMSE(valid_pred_stepwise, valid_df$price)
+print(paste("RMSE on Validation Set (Stepwise):", rmse_valid_stepwise))
+```
+
+The stepwise regression model, though a useful tool for home price prediction in King County, presents several limitations. The RMSE indicates a reasonable but still substantial average prediction error, pointing to potential missing factors in the model. It may overlook complex, non-linear relationships and interactions between variables, and the stepwise selection process could exclude important predictors for certain house types. Furthermore, its performance and feature selection are sensitive to the specific data sample used, and with a Multiple R-squared of around 0.65, a significant portion of the variance in home prices remains unexplained.
+
+The K-Nearest Neighbors (KNN) regression model was employed as the second approach to predict home prices in King County. Three different KNN models with varying values of k(3, 5, and 7) were tested to identify the most suitable one for the datasets.
+
+```{r}
+# KNN model set k = 3
+# Using knnreg for regression
+knn_model_k3 <- caret::knnreg(price ~ ., 
+                              data = train_norm, k = 3)
+knn_model_k3
+
+# Predict on training set
+knn_pred_k3_train <- predict(knn_model_k3, 
+                             newdata = train_norm[, -c(1)])
+head(knn_pred_k3_train)
+
+# RMSE on Training Set
+rmse_train_k3 <- RMSE(knn_pred_k3_train, train_norm$price)
+print(paste("RMSE on Training Set (KNN k=3):", rmse_train_k3))
+
+# Predict on Validation Set
+knn_pred_k3_valid <- predict(knn_model_k3, 
+                             newdata = valid_norm[, -c(1)])
+head(knn_pred_k3_valid)
+
+# RMSE on Validation Set
+rmse_valid_k3 <- RMSE(knn_pred_k3_valid, valid_norm$price)
+print(paste("RMSE on Validation Set (KNN k=3):", rmse_valid_k3))
+```
+
+```{r}
+# KNN model set k = 5
+# Using knnreg for regression
+knn_model_k5 <- caret::knnreg(price ~ ., 
+                              data = train_norm, k = 5)
+knn_model_k5
+
+# Predict on training set
+knn_pred_k5_train <- predict(knn_model_k5, 
+                             newdata = train_norm[, -c(1)])
+head(knn_pred_k5_train)
+
+# RMSE on Training Set
+rmse_train_k5 <- RMSE(knn_pred_k5_train, train_norm$price)
+print(paste("RMSE on Training Set (KNN k=5):", rmse_train_k5))
+
+# Predict on Validation Set
+knn_pred_k5_valid <- predict(knn_model_k5, 
+                             newdata = valid_norm[, -c(1)])
+head(knn_pred_k5_valid)
+
+# RMSE on Validation Set
+rmse_valid_k5 <- RMSE(knn_pred_k5_valid, valid_norm$price)
+print(paste("RMSE on Validation Set (KNN k=5):", rmse_valid_k5))
+```
+
+```{r}
+# KNN model set k = 7
+# Using knnreg for regression
+knn_model_k7 <- caret::knnreg(price ~ ., 
+                              data = train_norm, k = 7)
+knn_model_k7
+
+# Predict on training set
+knn_pred_k7_train <- predict(knn_model_k7, 
+                             newdata = train_norm[, -c(1)])
+head(knn_pred_k7_train)
+
+# RMSE on Training Set
+rmse_train_k7 <- RMSE(knn_pred_k7_train, train_norm$price)
+print(paste("RMSE on Training Set (KNN k=7):", rmse_train_k7))
+
+# Predict on Validation Set
+knn_pred_k7_valid <- predict(knn_model_k7, 
+                             newdata = valid_norm[, -c(1)])
+head(knn_pred_k7_valid)
+
+# RMSE on Validation Set
+rmse_valid_k7 <- RMSE(knn_pred_k7_valid, valid_norm$price)
+print(paste("RMSE on Validation Set (KNN k=7):", rmse_valid_k7))
+```
+
+Comparing Models
+
+When examining the performance of models it is observed that Linear Regression has the RMSE, on the training set in comparison to the KNN models. This indicates that Linear Regression does not fit the training data as KNN. Additionally its validation RMSE is the highest suggesting that it may not generalize effectively as some KNN models but still performs better than the 3 nearest neighbors model.
+
+The 3 Nearest Neighbors model demonstrates the fit for the training data with its RMSE. However it exhibits a RMSE on the validation set, which implies overfitting to the training data and limited ability to generalize to data.
+
+On the hand The 5 Nearest Neighbors model strikes a balance between overfitting and underfitting. Its RMSE for the training set is higher than that of 3 neighbors but lower than that of 7 neighbors. Furthermore its validation RMSE is lower, than both Linear Regression and 3 nearest neighbors models indicating generalization capabilities compared to those two.
+
+While 7 Nearest Neighbors does not closely fit the training data ( training RMSE) it achieves the RMSE on the validation set. This suggests that although there might be a slight bias present this model generalizes better to data compared to all models.
+
+Based on prediction performance we can conclude that The 7 Nearest Neighbors model stands out as being most suitable.
+
+Although it may not have the Root Mean Square Error (RMSE) on the training set the 7 nearest neighbors model strikes a balance, between accurately fitting the data and making reliable predictions for new data. This is evident from its achievement of the RMSE on the validation set.
+
+In terms a models ability to perform well on data (generalization) holds greater value than its performance solely on the training set. This is especially important for tasks like Jacob Kawalskis goal of predicting house prices in King County. Therefore based on our tests I recommend using the 7 neighbors model as it proves to be the reliable choice for making predictions, about new houses.
+
+The 7 nearest neighbor model that was chosen although effective, for predicting house prices does have some limitations. For instance it has an RMSE of \$212,014 which suggests there might be prediction errors for high value properties. The models computational intensity and sensitivity to the number of neighbors and feature scaling also highlight challenges when applying the model consistently. Moreover compared to regression models this particular model lacks interpretability making it harder to understand how it determines prices. Additionally it needs to be re evaluated with each prediction or data update which can be inefficient, in a changing market.
+
+```{r}
+# Predict on Test Set
+test_pred_knn_k7 <- predict(knn_model_k7, newdata = house_test_norm)
+head(test_pred_knn_k7)
+
+#Calculate and display the range of predictions
+range_test_pred_knn_k7 <- range(test_pred_knn_k7)
+print(paste("Min Prediction:", range_test_pred_knn_k7[1]))
+print(paste("Max Prediction:", range_test_pred_knn_k7[2]))
+```
+
+Here are the predicted prices for the first six houses in the test set:
+
+\$448,785.70
+
+\$697,142.90
+
+\$915,471.40
+
+\$285,607.10
+
+\$426,928.60
+
+\$406,428.60
+
+The model's predictions for the entire test set of houses range from a minimum of \$285,607.14 to a maximum of \$915,471.43.
+
+Jacob, our analysis using a KNN model with 7 neighbors has provided us with estimated prices, for houses that might catch your interest. These estimates are based on how similar each house's to others we have information about in King County. We have predictions for all the houses you are considering. They vary quite a bit. The lowest price we have seen is around \$285,600, indicating a property. On the end there's a house thats estimated at over \$900,000 suggesting it possesses desirable features. These figures give us an idea of what you can expect to pay or charge for homes, like these in the market.
+
+To sum up the projects main goal was to assist Jacob Kawalski in analyzing and predicting house prices, in King County. This involved an exploration of data. Building different models. After evaluation we found that the 7 nearest neighbor regression model was the effective for estimation. It outperformed models like linear regression and various KNN models with neighbor values. Although it may have limitations when it comes to interpretability and potential prediction errors it strikes a balance between accuracy and generalizability to data. Jacob can rely on the models predictions to make decisions in the real estate market. However it is advisable to consider these predictions alongside tools, within a decision making framework. Regular updates and refinements using data will further improve the models reliability and usefulness in navigating King Countys real estate landscape.
